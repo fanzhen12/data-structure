@@ -99,5 +99,82 @@ public:
 
     // 禁用拷贝构造函数和赋值运算符
     // 因为类中包含原始指针，默认的拷贝行为会导致浅拷贝问题
-    
+    HashTable(const HashTable&) = delete;
+    HashTable& operator=(const HashTable&) = delete;
+
+    // 插入或更新键值对
+    void put(const K& key, const V& value) {
+        // 检查负载因子，超过阈值则扩容
+        if (static_cast<double>(size) / capacity >= loadFactorThreshold) {
+            rehash();
+        }
+
+        int index = hashFunc(key);
+        // 遍历链表，检查键是否存在（存在则更新，不存在则插入新节点）
+        Node* current = buckets[index];
+        while (current) {
+            if (current->key == key) {
+                current->value = value; // 更新值
+                return;
+            }
+            current = current->next;
+        }
+
+        // 键不存在，则插入新节点（链表头部插入，效率更高）
+        Node* newNode = new Node(key, value);
+        newNode->next = buckets[index];
+        buckets[index] = newNode;
+        size++;
+    }
+
+    // 查找键对应的值
+    bool get(const K& key, V& value) const {
+        int index = hashFunc(key);
+        // 遍历链表查找键
+        Node* current = buckets[index];
+        while (current) {
+            if (current->key == key) {
+                value = current->value; // 找到键，返回对应值
+                return true;
+            }
+        }
+        return false; // 未找到键
+    }
+
+    // 删除键值对
+    bool remove(const K& key) {
+        int index = hashFunc(key);
+        Node* current = buckets[index];
+        Node* prev = nullptr; // 记录前一个节点
+
+        // 遍历链表查找目标节点
+        while (current) {
+            if (current->key == key) {
+                // 找到目标节点，开始执行删除
+                if (!prev) {
+                    // 目标就是链表头节点
+                    buckets[index] = current->next;
+                } else {
+                    // 目标是中间/尾部节点
+                    prev->next = current->next;
+                }
+                delete current; // 释放节点内存
+                size--;
+                return true;
+            }
+            prev = current;
+            current = current->next;
+        }
+        return false; // 未找到键
+    }
+
+    // 获取当前元素数量
+    int getSize() const {
+        return size;
+    }
+
+    // 判空
+    bool isEmpty() const {
+        return size == 0;
+    }
 };
