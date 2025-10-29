@@ -93,7 +93,74 @@ public:
     }
 
     // ------- 赋值运算符 -------
+    // 拷贝赋值运算符（深拷贝，强异常安全）
+    MyVector& operator=(const MyVector& other) {
+        if (this != &other) {
+            // 先构造临时对象，再交换（异常安全，因为若拷贝失败，元对象不变）
+            MyVector tmp(other);
+            swap(tmp);
+        }
+        return *this;
+    }
+
+    // 移动赋值运算符（资源转移，不抛异常）
+    MyVector& operator=(MyVector&& other) noexcept {
+        if (this != &other) {
+            destroy_range(data_, data_ + size_); // 销毁当前元素
+            deallocate(data_); // 释放当前内存
+
+            // 接管other的资源
+            data_ = other.data_;
+            size_ = other.size_;
+            capacity_ = other.capacity_;
+
+            // 原对象置空
+            other.data_ = nullptr;
+            other.size_ = 0;
+            other.capacity_ = 0;
+        }
+        return *this;
+    }
+
+    // 初始化列表赋值运算符
+    MyVector& operator=(std::initializer_list<T> init) {
+        MyVector tmp(init); // 先构造临时对象
+        swap(tmp); // 交换资源
+        return *this;
+    }
+
+    // ------- 迭代器 ------- //
+    iterator begin() noexcept { return data_; }
+    const_iterator begin() const noexcept { return data_; }
+    const_iterator cbegin() const noexcept { return data_; }
+
+    iterator end() noexcept { return data_ + size_; }
+    const_iterator end() const noexcept { return data_ + size_; }
+    const_iterator cend() const noexcept { return data_ + size_; }
+
+    reverse_iterator rbegin() noexcept {
+        return reverse_iterator(end());
+    }
+    const_reverse_iterator rbegin() const noexcept {
+        return const_reverse_iterator(end());
+    }
+    const_reserve_iterator crbegin() const noexcept {
+        return const_reserve_iterator(end());A
+    }
+
+    reverse_iterator rend() noexcept {
+        return reverse_iterator(begin());
+    }
+    const_reserve_iterator rend() const noexcept {
+        return const_reverse_iterator(begin());
+    }
+    const_reserve_iterator crend() const noexcept {
+        return const_reverse_iterator(begin());
+    }
+
+    // ------- 元素访问 ------- //
     
+
 
 private:
     T* data_; // 指向连续内存块的指针
