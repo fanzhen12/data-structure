@@ -159,7 +159,149 @@ public:
     }
 
     // ------- 元素访问 ------- //
+    reference operator[](size_type index) noexcept { return data_[index]; }
+    const_reference operator[](size_type index) const noexcept { return data_[index]; }
+
+    reference at(size_type index) {
+        if (index >= size_) {
+            throw std::out_of_range("MyVector::at: index out of range");
+        }
+        return data_[index];
+    }
+    const_reference at(size_type index) const {
+        if (index >= size_) {
+            throw std::out_of_range("MyVector::at: index out of range");
+        }
+        return data_[index];
+    }
+
+    reference front() {
+        if (empty()) {
+            throw std::out_of_range("MyVector::front: empty vector");
+        }
+        return *begin();
+    }
+    const_reference front() const {
+        if (empty()) {
+            throw std::out_of_range("MyVector::front: empty vector");
+        }
+        return *begin();
+    }
     
+    reference back() {
+        if (empty()) {
+            throw std::out_of_range("MyVector::back: empty vector");
+        }
+        return *(end() - 1); // 为什么是end() - 1？因为end()指向的是最后一个元素的下一个位置，减1才能得到最后一个元素
+    }
+    const_reference back() const {
+        if (empty()) {
+            throw std::out_of_range("MyVector::back: empty vector");
+        }
+        return *(end() - 1);
+    }
+
+    pointer data() noexcept { return data_; } // 为什么noexcept? 因为这个函数只是返回一个指针，不会抛出异常。
+    const_pointer data() const noexcept { return data_; }
+
+    // ------- 容量相关 ------- //
+    bool empty() const noexcept { return size_ == 0; }
+    size_type size() const noexcept { return size_; }
+    size_type capacity() const noexcept { return capacity_; }
+
+    // 预留容量（确保容量至少为new_cap，不改变元素数量）
+    void reserve(size_type new_cap) {
+        if (new_cap <= capacity_) {
+            return; // 当前容量已足够
+        }
+        pointer new_data = allocate(new_cap); // 分配新内存，不构造元素
+        try {
+            // 移动现有元素到新内存
+            move_range(new_data, data_, data_ + size_);
+        } catch (...) {
+            deallocate(new_data); // 异常安全：释放新内存
+            throw;
+        }
+        // 销毁旧元素并释放旧内存
+        destroy_range(data_, data_ + size_);
+        deallocate(data_);
+
+        // 更新指针和容量
+        data_ = new_data;
+        capacity_ = new_cap;
+    }
+
+    // 缩减容量到当前大小
+    void shrink_to_fit() {
+        if (capacity_ > size_) {
+            reserve(size_); // 利用reserve实现缩减
+        }
+    }
+
+    // 调整大小(改变元素数量，新增元素用value初始化)
+    void resize(size_type new_size, const T& value = T()) {
+        if (new_size > size_) {
+            // 新增元素：若需扩容则先预留
+            if (new_size > capacity_) {
+                reserve(new_size);
+            }
+            construct_range(data_ + size_, new_size - size_, value); // 拷贝构造新增元素
+        } else if (new_size < size_) {
+            // 销毁多余元素
+            destroy_range(data_ + new_size, data_ + size_);
+        }
+        size_ = new_size;
+    }
+
+    // ------- 元素修改 ------- //
+    // 清空元素（不释放内存）
+    void clear() noexcept {
+        destroy_range(data_, data_ + size_);
+        size_ = 0;
+    }
+
+    // 交换两个容器的资源（不抛异常）
+    void swap(MyVector& other) noexcept {
+        std::swap(data_, other.data_);
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+    }
+
+    // 尾部添加元素（拷贝）
+    void push_back(const T& value) {
+        emplace_back(value); // 复用emplace_back逻辑，之后会实现emplace_back
+    }
+
+    // 尾部添加元素（移动）
+    void push_back(T&& value) {
+        emplace_back(std::move(value)); // 复用emplace_back逻辑
+    }
+
+    // 尾部原地构造元素（完美转发参数）
+    template <typename... Args>
+    void emplace_back(Args&&... args) { // 这里是转发引用，不是右值引用
+        if (size_ >= capacity_) {
+            // 扩容策略：若容量为0则初始化为1，否则翻倍（保证均摊O(1)复杂度）为什么？因为每次扩容都翻倍，可以保证插入操作的均摊时间复杂度为O(1)。
+            const size_type new_cap = (capacity_ == 0) ? 1 : capacity_ * 2;
+            reserve(new_cap);
+        }
+        // 就地构造新元素
+        new (data_ + size_) T(std::forward<Args>(args)...);
+        ++size_;
+    }
+
+    // 尾部移除元素
+    void pop_back() {
+        if (empty()) {
+            throw std::out_of_range("MyVector::pop_back: empty vector");
+        } else {
+            --size_;
+            data_[size_].~T(); // 显式调用析构函数
+            // 上面这句代码等价于 data_[size_ - 1].~T();
+            // 也等价于 (*(data_ + size_ - 1)).~T();
+            // []就是指针偏移加解引用的简写形式。
+        }
+    }
 
 
 private:
