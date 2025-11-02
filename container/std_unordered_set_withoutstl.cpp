@@ -87,7 +87,7 @@ struct Node;
 template <typename T>
 class LinkedList;
 
-// 链表节点：存储元素和指向下一个节点的指针
+// ------- 链表节点：存储元素和指向下一个节点的指针 ------- //
 template <typename T>
 struct Node {
     T data;
@@ -95,7 +95,7 @@ struct Node {
     Node(const T& val) : data(val), next(nullptr) {}
 };
 
-// 自定义单向链表类（用于桶的实现）
+// ------- 自定义单向链表类（用于桶的实现） ------- //
 template <typename T>
 class LinkedList {
 private:
@@ -200,5 +200,184 @@ public:
 
 };
 
-// 自定义动态数组（作为桶数组，存储多个头指针，这些指针是链表的头指针）
+// ------- 自定义动态数组（作为桶数组，存储多个头指针，这些指针是链表的头指针，1个链表就是一个桶） ------- //
 template <typename T>
+class DynamicArray {
+private:
+    T* data; // 数据指针
+    size_t cap; // 容量
+    size_t len; // 实际元素数
+
+public:
+    // 构造函数：初始容量为n，默认构造每个元素
+    DynamicArray(size_t n) : cap(n), len(n) {
+        data = new T[cap]; // 解释：
+        // new T[cap]表示动态分配一个包含cap个T类型元素的数组
+        // 返回值是指向数组首元素的指针，赋值给data指针变量
+    }
+
+    // 析构函数
+    ~DynamicArray() {
+        delete[] data;
+    }
+
+    // 禁止拷贝（避免浅拷贝导致双重释放和指针悬空）
+    DynamicArray(const DynamicArray&) = delete;
+    DynamicArray& operator=(const DynamicArray&) = delete;
+
+    // 交换两个动态数组的数据
+    void swap(DynamicArray& other) {
+        T* temp_data = data;
+        data = other.data;
+        other.data = temp_data;
+
+        size_t temp_cap = cap;
+        cap = other.cap;
+        other.cap = temp_cap;
+
+        size_t temp_len = len;
+        len = other.len;
+        other.len = temp_len;
+    }
+
+    // 访问元素（下标操作）
+    T& operator[](size_t index) {
+        return data[index]; // 这里的[]操作符是C++中
+        // 指针的偏移加上解引用的简写。
+    }
+
+    const T& operator[](size_t idx) const {
+        return data[idx];
+    }
+
+    // 获取容量
+    size_t capacity() const {
+        return cap;
+    }
+
+    // 获取长度
+    size_t size() const {
+        return len;
+    }
+};
+
+// 到目标位置已经自定义了链表节点，链表以及动态数组，注意：
+// 动态数组中存储的类型不是指针，而是链表对象本身，为什么呢？
+// 因为链表对象已经包含了头指针head，可以直接通过head来方便地对链表进行遍历
+
+// ------- 自定义哈希集合类 ------- //
+template <typename T,
+          typename Hash = MyHash<T>,
+          typename KeyEqual = MyEqual<T>>
+class MyUnordered {
+private:
+    using Bucket = LinkedList<T>; // 每个桶是自定义链表
+    DynamicArray<Bucket> buckets_; // 桶的动态数组
+    size_t size_; // 元素总数
+    Hash hasher_; // 哈希函数对象
+    KeyEqual key_eq_; // 相等性比较对象
+    float max_load_factor_; // 最大负载因子
+
+private:
+    // 计算桶索引
+    size_t get_bucket_index(const T& key) const {
+        return hasher_(key) % buckets_.capacity();
+    }
+
+    // 重哈希：扩容并且迁移元素
+    void rehash(size_t new_bucket_count) {
+        if (new_bucket_count <= buckets_.capacity()) {
+            return; // 此时不需要扩容
+        }
+        DynamicArray<Bucket> new_buckets(new_bucket_count);
+        // 上一句代码的解释：调用DynamicArray的DynamicArray(size_t n) 构造函数
+
+        // 迁移所有元素到新桶
+        for (size_t i = 0; i < buckets_.capacity(); ++i) {
+            const Bucket& old_bucket = buckets_[i];
+            old_bucket.for_each([&](const T& elem) {
+                size_t new_idx = hasher_(elem) % new_bucket_count;
+                new_buckets[new_idx].push_back(elem);
+            });
+        }
+
+        // 交换新旧桶数组
+        buckets_.swap(new_buckets);
+    }
+
+public:
+    // 构造函数
+    explicit MyUnordered(size_t bucket_count = 11, float max_load_factor = 1.0f) 
+        : buckets_(bucket_count), size_(0), max_load_factor_(max_load_factor) {}
+
+    // 析构函数：依赖DynamicArray和LinkedList的析构函数自动释放内存
+    ~MyUnordered() = default;
+
+    // 插入元素（返回是否成功）
+    bool insert(const T& key) {
+        // 检查是否需要重哈希
+        if (load_factor() > max_load_factor_) {
+            rehash(buckets_.capacity() * 2 + 1); // 新桶数：原大小*2+1（保证质数特性）
+        }
+
+        size_t idx = get_bucket_index(key);
+        Bucket& bucket = buckets_[idx];
+
+        // 检查元素是否已经存在
+        if (bucket.contains(key, key_eq)) {
+            return false; // 插入失败，因为元素已经存在
+        }
+
+        // 插入新的元素
+        bucket.push_back(key);
+        size_++;
+        return true;
+    }
+
+    // 删除元素（返回是否成功）
+    bool erase(const T& key) {
+        size_t idx = get_bucket_index(key);
+        Bucket& bucket = buckets_[idx];
+
+        // 尝试删除元素
+        if (bucket.erase(key, key_eq_)) { // 调用LinkedList的erase()方法
+            size_--;
+            return true;
+        }
+        return false;
+    }
+
+    // 查找元素（返回是否成功）
+    bool find(const T& key) const {
+        size_t idx = get_bucket_index(key);
+        const Bucket& bucket = buckets_[idx];
+        return bucket.contains(key, key_eq_);
+    }
+
+    // 清空集合
+    void clear() {
+        for (size_t i = 0; i < buckets_.capacity(); ++i) {
+            buckets_[i].clear();
+        }
+        size_ = 0;
+    }
+
+    // 获取元素数量
+    size_t size() const {
+        return size_;
+    }
+
+    // 检查链表是否为空
+    bool empty() const {
+        return size_ == 0;
+    }
+
+    float load_factor() const {
+        return static_cast<float>(size_) / buckets_.capacity();
+    }
+
+    // 获取当前桶的数量
+    size_t bucket_count() const {
+        return buckets_.capacity();
+    }
+};
