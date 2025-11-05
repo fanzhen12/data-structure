@@ -80,7 +80,7 @@ public:
             // 解释如下：
             // 当我们编写a == b时（其中a和b是iterator对象），编译器会自动转换为对a.operator==(b)的调用（这一句很重要，对于理解透彻很重要）
             // 那么，同理，如果在operator==的实现中写成return *this == other;，这实际上又会调用operator==函数本身，因为
-            // return *this == other;这一句等价于return this->operator==(other); 这里自身调用自身，无限递归
+            // return *this == other;这一句等价于return this->operator==(other); 也等价于(*this).operator==(other)这里自身调用自身，无限递归
         }
         bool operator!=(const iterator& other) const {
             return !(*this == other);
