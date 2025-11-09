@@ -90,8 +90,8 @@ public:
 
         /*
         前置后置++总结：
-        ++(*this)（前置 ++）：相当于this->operator(),先修改迭代器，再返回修改后的自身；
-        (*this)++（后置 ++）：相当于this->operator(int)先保存当前状态，再修改迭代器，最后返回旧状态。
+        ++(*this)（前置 ++）：相当于this->operator++(),先修改迭代器，再返回修改后的自身；
+        (*this)++（后置 ++）：相当于this->operator++(int)先保存当前状态，再修改迭代器，最后返回旧状态。
         */
 
         // 相等性比较
@@ -110,6 +110,58 @@ public:
 
 public:
     // 构造函数：指向初始桶数量、哈希函数、相等性比较函数
+    explicit MyUnorderedMultimap(size_type bucket_count = 16,
+                                 const Hash& hash = Hash(),
+                                 const KeyEqual& equal = KeyEqual())
+                                 : buckets_(bucket_count), hash_func_(hash)
+                                   , equal_func_(equal), size_(0) {}
+
+    // 插入键值对(返回指向新元素的迭代器)
+    iterator insert(const Key& key, const T& value) {
+        return insert(value_type(key, value));
+    }
+
+    iterator insert(const value_type& val) {
+        // 检查负载因子
+        if (size_ + 1 > buckets_.size() * max_load_factor_) {
+            rehash(buckets_.size() * 2);
+        }
+
+        // 计算哈希值并定位桶
+        size_type hash_val = hash_func_(val.first); // first就是key
+        size_type bucket_idx = hash_val % buckets_.size();
+
+        // 插入元素到新桶的链表
+        buckets_[bucket_idx].push_back(val);
+        ++size_;
+
+        // 返回指向新元素的迭代器
+        auto list_it = buckets_[bucket_idx].end();
+        --list_it; // 指向新插入的元素
+        return iterator(this, bucket_idx, list_it);
+    }
+
+    // 查找所有匹配Key的元素（返回范围[begin, end)）
+    std::pair<iterator, iterator> equal_range(const Key& key) {
+        size_type hash_val = hash_func_(key);
+        size_type bucket_idx = hash_val % bucket_.size();
+        auto& bucket = buckets_[bucket_idx];
+
+        // 找到桶中第一个匹配的元素
+        auto begin_it = bucket.begin();
+        while (begin_it != bucket.end() && !equal_func_(begin_it->first, key)) {
+            ++begin_it;
+        }
+
+        // 找到桶中最后一个匹配元素的下一个位置
+        auto end_it = begin_it;
+        while (end_it != bucket.end() && equal_func_(end_it->first, key)) {
+            ++end_it;
+        }
+        return {iterator(this, bucket_idx, begin_it), iterator(this, bucket_idx, end_it)};
+    }
+
+    // 通过迭代器删除元素
 
 private:
     std::vector<std::list<value_type>> buckets_; // 桶数组（每个桶是链表）
