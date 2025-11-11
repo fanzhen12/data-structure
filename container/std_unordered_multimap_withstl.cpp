@@ -161,7 +161,80 @@ public:
         return {iterator(this, bucket_idx, begin_it), iterator(this, bucket_idx, end_it)};
     }
 
-    // 通过迭代器删除元素
+    // 删除所有匹配key的元素（返回删除的数量）
+    siz_type erase(const Key& key) {
+        size_type hash_val = hash_func_(key);
+        size_type bucket_idx = hash_val % buckets_.size();
+        auto& bucket = buckets_[bucket_idx];
+        size_type = count = 0;
+
+        // 遍历桶并删除匹配元素
+        auto it = bucket.begin();
+        while (it != bucket.end()) {
+            if (equal_func_(it->first, key)) {
+                it = bucket.erase(it); // erase返回下一个迭代器（调用的是std::list的erase
+                ++count;
+                --size_;
+            } else {
+                ++it;
+            }
+        }
+        return count;
+    }
+
+    // 通过迭代器删除元素（返回下一个元素的迭代器）
+    iterator erase(iterator pos) {
+        if (pos == end()) {
+            return end();
+        }
+
+        size_type bucket_idx = pos.bucket_idx_;
+        auto& bucket = buckets_[bucket_idx];
+        auto list_it = pos.list_it_;
+
+        // 保存下一个迭代器
+        auto next_it = list_it;
+        ++next_it;
+
+        // 删除元素
+        bucket.erase(list_it);
+        --size_;
+
+        // 返回下一个有效迭代器
+        if (next_it != bucket.end()) {
+            return iterator(this, bucket_idx, next_it);
+        } else {
+            // 寻找下一个非空的桶
+            size_type next_bucket = bucket_idx + 1;
+            while (next_bucket < buckets_.size() && bucket_[next_bucket].empty()) {
+                ++next_bucket;
+            }
+            return (next_bucket < buckets_.size()) ?
+                iterator(this, next_bucket, buckets_[next_bucket].begin())
+                : end();
+        }
+    }
+
+    // 迭代器接口
+    iterator begin() {
+        // 找到第一个非空桶
+        size_type bucket_idx = 0;
+        while (bucket_idx < buckets_.size() && buckets_[bucket_idx].empty()) {
+            ++bucket_idx;
+        }
+        return (bucket_idx < buckets_.size())
+            ? iterator(this, bucket_idx, buckets_[bucket_idx].begin())
+            : end();
+    }
+
+    iterator end() {
+        return iterator(this, buckets_.size(), typename std::list<value_type>::iterator());
+    }
+
+    // 基本属性
+    size_type size() const { return size_; }
+    bool empty() const { return size_ == 0; }
+    size_type bucket_count() const { return buckets_.size(); // 桶数量
 
 private:
     std::vector<std::list<value_type>> buckets_; // 桶数组（每个桶是链表）
